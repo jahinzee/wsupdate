@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "wsupdate"
 description = "A comprehensive and extendable Linux system updater, written in Python."
-version = "23.12.1"
+version = "23.12.2"
 authors = [
     { name="Jahin Z.", email="jahinzee@outlook.com" }
 ]

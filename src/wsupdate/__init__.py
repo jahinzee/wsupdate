@@ -11,7 +11,7 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
 
-import shutil, subprocess, platform, argparse
+import shutil, subprocess, platform, argparse, os
 
 
 def get_subprocess_function(brief, dryrun):
@@ -80,18 +80,33 @@ def get_args():
         action="store_true",
         help="use header labels instead of ANSI colours",
     )
+    parser.add_argument(
+        "-r",
+        "--update-arch",
+        action="store_true",
+        help="update Arch Linux and AUR packages (EXPERIMENTAL) (will be ignored if not on Arch Linux)",
+    )
+    parser.add_argument(
+        "-R",
+        "--skip-arch-warning",
+        action="store_true",
+        help="skip Arch Linux experimental warning, use with --update-arch (will be ignored if not on Arch Linux)",
+    )
+    parser.add_argument(
+        "-P",
+        "--use-pkcon-on-arch",
+        action="store_true",
+        help="allow PackageKit updates on Arch Linux (will be ignored if not on Arch Linux)",
+    )
     return parser.parse_args()
-
-
-def log(message, mode):
-    MODES = {"ERROR": 1, "OK": 2, "WARN": 3, "INFO": 4, "SECTION": 7}
-    BOLD = "\033[1m"
-    RESET = "\033[0m"
-    print(f"{BOLD}\033[1;3{MODES.get(mode, 7)}m:: {message}{RESET}")
 
 
 def binary_exists(name: str) -> bool:
     return shutil.which(name) is not None
+
+
+def running_on_arch() -> bool:
+    return os.path.exists("/etc/arch-release")
 
 
 def update_flatpak(run, log, system, user):
@@ -140,6 +155,53 @@ def update_firmware(run, log):
     )
 
 
+def display_arch_warning():
+    print("""
+The Arch Linux updater is in an experimental stage, and has not been
+thoroughly tested. Your system may be in an unstable state if used
+improperly. It is strongly recommended that you use
+`wsupdate --dryrun` to validate command outputs before committing to
+an update.
+
+"Users must be vigilant and take responsibility for maintaining
+their own system." -- Arch Linux Wiki
+
+Please file any feedback on the GitHub issue tracker:
+    <https://github.com/jahinzee/wsupdate/issues>.
+
+In future, run `wsupdate --update-arch --skip-arch-warning` to skip
+this notice.
+    """)
+    return input("Update Arch packages? (no will continue with other routines) [y/N]: ") == "y"
+
+
+def update_arch(run, log, skip_arch_warning):
+    if not skip_arch_warning:
+        log("IMPORTANT; PLEASE READ", "WARN")
+        if not display_arch_warning():
+            return
+    else:
+        log("Arch Linux warning skipped.", "WARN")
+
+    if not binary_exists("pacman"):
+        log("pacman not available, skipping...", "WARN")
+        return
+    if not update_aur(run, log):
+        log("Updating Arch packages (pacman)...", "SECTION")
+        run(["sudo", "pacman", "-Syu"])
+
+
+def update_aur(run, log):
+    aur_helpers = [["yay", "-Syu"], ["paru", "-Syu"]]
+    for helper in aur_helpers:
+        if binary_exists(helper[0]):
+            log(f"Updating Arch and AUR packages ({helper[0]})...", "SECTION")
+            run(helper)
+            return True
+    log("No supported AUR helpers found.", "WARN")
+    return False
+
+
 def update_pipx(run, log):
     if not binary_exists("pipx"):
         log("pipx not available, skipping...", "WARN")
@@ -148,12 +210,15 @@ def update_pipx(run, log):
     run(["pipx", "upgrade-all"])
 
 
-def update(run, log):
+def update(run, log, arguments):
     # Modify this function to customise the update procedure
     update_flatpak(run, log, system=True, user=True)
     update_distrobox(run, log)
     update_pipx(run, log)
-    update_packagekit(run, log, offline=True)
+    if arguments.use_pkcon_on_arch or not running_on_arch():
+        update_packagekit(run, log, offline=True)
+    if arguments.update_arch and running_on_arch():
+        update_arch(run, log, arguments.skip_arch_warning)
     update_firmware(run, log)
 
 
@@ -167,7 +232,7 @@ def main():
         exit(1)
     run = get_subprocess_function(arguments.brief, arguments.dryrun)
     log = get_log_function(arguments.plain)
-    update(run, log)
+    update(run, log, arguments)
     log("Upgrade complete!", "OK")
 
 
