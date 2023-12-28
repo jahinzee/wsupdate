@@ -17,13 +17,10 @@ packages, and BIOS firmware with fwupd.
 
 ## Installation
 
-To install this script, clone the repository, and use either `pipx`
-(recommended) or `pip` to install the script.
+To install this script, use either `pipx` (recommended) or `pip`.
 
 ```
-git clone https://github.com/jahinzee/wsupdate.git
-cd wsupdate
-pipx install .
+pipx install git+https://github.com/jahinzee/wsupdate.git
 ```
 
 To uninstall, simply run `pipx uninstall wsupdate` or `pip uninstall wsupdate`.
